@@ -22,17 +22,35 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
 
     t1 = Task(
         description=(
-            f"Read the news article below and extract up to {max_claims} concise, "
-            "VERIFIABLE factual claims. Focus on statistics, named entities, "
-            "concrete events, and dates. Ignore opinions and rhetorical language.\n\n"
+            f"Read the news article below and extract up to {max_claims} factual claims "
+            "that can be verified against an external source.\n\n"
+            "Each claim MUST meet all of these criteria:\n"
+            "  1. A complete sentence — not a fragment or headline rephrasing.\n"
+            "  2. Contains at least one of: a named entity (person, organisation, place, "
+            "publication, law), a date or time period, a number or statistic, OR a "
+            "specific factual assertion about a known concept, scientific finding, "
+            "legal standard, or established process.\n"
+            "  3. Makes a falsifiable assertion — something that can be confirmed or "
+            "contradicted by looking it up.\n"
+            f"  4. At least 10 words long.\n\n"
+            "Do NOT include:\n"
+            "  - Opinions or value judgements unless directly attributed to a named "
+            "person or institution ('the policy was a disaster' → exclude; "
+            "'Senator Smith called the policy disastrous in a Senate hearing' → include)\n"
+            "  - Vague generalisations ('many people believe...', 'experts say...')\n"
+            "  - Restatements of the headline\n"
+            "  - Predictions or hypotheticals\n\n"
+            f"If the article contains fewer than {max_claims} claims that meet these "
+            "criteria, return only the valid ones — do not pad with weak claims.\n\n"
             f"{article_block}\n\n"
-            f"Return a JSON object matching the ClaimsOutput schema with exactly "
-            f"{max_claims} items in 'claims' (or fewer if the article has fewer verifiable claims)."
+            f"Return a JSON object with a 'claims' list containing 1–{max_claims} strings."
         ),
         agent=agents["claim_extractor"],
         expected_output=(
-            'A JSON object like {"claims": ["claim 1", "claim 2", "claim 3"]} '
-            "containing short, verifiable factual claims."
+            'A JSON object like {"claims": ["Harvard University scientists published a '
+            'study in Nature claiming the Moon is made of cheddar cheese.", '
+            '"Apollo 11 astronauts returned 21.5 kg of lunar samples in July 1969."]} '
+            "where each claim is a complete, specific, falsifiable sentence."
         ),
         output_pydantic=ClaimsOutput,
     )
