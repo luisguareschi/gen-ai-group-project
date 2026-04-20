@@ -17,7 +17,10 @@ Article -> Claim Extractor -> Fact Checker (Wikipedia) -> Bias Detector -> Judge
 
 ### 1. Python environment
 
+Requires **Python 3.10–3.13**. Python 3.14+ is not supported by `crewai`.
+
 ```bash
+python3.13 -m venv .venv      # or python3.12
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
