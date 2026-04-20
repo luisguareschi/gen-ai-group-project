@@ -30,9 +30,9 @@ def sidebar_controls() -> None:
 
     if backend == "ollama":
         ollama_models = [
-            "qwen2.5:3b",
-            "qwen2.5:7b",
             "qwen3:8b",
+            "qwen2.5:7b",
+            "qwen2.5:3b",
             "gemma3:4b",
         ]
         default_model = default_settings.ollama_model

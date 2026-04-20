@@ -60,18 +60,34 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
     t3 = Task(
         description=(
             "Analyze the BIAS, TONE, and FRAMING of the following news article. "
-            "Do NOT evaluate the factual correctness - only the language. "
-            "Look for emotionally loaded words, sensationalist headlines, "
-            "one-sided framing, unattributed claims, missing counter-arguments, "
-            "and ad-hominem attacks.\n\n"
+            "Do NOT evaluate factual correctness — only the language and presentation.\n\n"
+            "Score the article on this scale:\n"
+            "  0.0–0.2  Neutral: dry, factual, wire-service style (Reuters/AP)\n"
+            "  0.3–0.5  Mild bias: editorial framing, some loaded language\n"
+            "  0.6–0.7  Moderate bias: clear agenda, emotional appeals\n"
+            "  0.8–1.0  High bias: tabloid/propaganda style, inflammatory\n\n"
+            "Tone must be one of: neutral, balanced, skeptical, editorial, "
+            "sensationalist, inflammatory, alarmist\n\n"
+            "Check for each of the following and list only the ones actually present:\n"
+            "  - ALL CAPS or hyperbolic words in headline (SHOCKING, BREAKING, EXPOSED)\n"
+            "  - Emotionally loaded adjectives (disastrous, radical, corrupt)\n"
+            "  - Unattributed claims ('sources say', 'reportedly', 'many believe')\n"
+            "  - One-sided framing with no counter-argument or expert dissent\n"
+            "  - Ad-hominem attacks on individuals rather than evidence-based criticism\n"
+            "  - Calls to action or outrage ('you should be angry', 'share this now')\n\n"
+            "IMPORTANT: the bias_score MUST reflect what is actually in the article. "
+            "A neutral wire-service article should score 0.1–0.2. "
+            "Do not default to 0.7 — only score that high if multiple flags are present.\n\n"
             f"{article_block}\n\n"
-            "Return a JSON object with: tone (single word), bias_score (0=neutral, "
-            "1=highly biased), flags (list of short strings describing specific issues found)."
+            "Return a JSON object with: tone (one word from the list above), "
+            "bias_score (0.0–1.0), flags (list of specific issues found, empty list if none)."
         ),
         agent=agents["bias_detector"],
         expected_output=(
-            'A JSON object like {"tone": "sensationalist", "bias_score": 0.7, '
-            '"flags": ["Emotionally loaded headline", "No counter-arguments"]}.'
+            'A JSON object like {"tone": "neutral", "bias_score": 0.15, "flags": []} '
+            'for a wire-service article, or {"tone": "sensationalist", "bias_score": 0.85, '
+            '"flags": ["ALL CAPS headline", "Unattributed claims", "No counter-arguments"]} '
+            "for a biased one."
         ),
         output_pydantic=BiasOutput,
     )
