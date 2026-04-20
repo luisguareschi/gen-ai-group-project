@@ -38,6 +38,11 @@ def sidebar_controls() -> None:
         default_model = default_settings.ollama_model
         options = ollama_models if default_model in ollama_models else [default_model] + ollama_models
         model = st.sidebar.selectbox("Ollama model", options, index=options.index(default_model))
+        st.sidebar.caption(
+            "Larger models (7b, 8b) produce more reliable JSON and better reasoning "
+            "but are slower. Smaller models (3b, 4b) are faster but may produce "
+            "inconsistent outputs or miss nuanced claims."
+        )
         base_url = st.sidebar.text_input("Ollama base URL", value=default_settings.ollama_base_url)
         os.environ["OLLAMA_MODEL"] = model
         os.environ["OLLAMA_BASE_URL"] = base_url
@@ -51,9 +56,19 @@ def sidebar_controls() -> None:
     temperature = st.sidebar.slider(
         "Temperature", min_value=0.0, max_value=1.0, value=default_settings.temperature, step=0.05
     )
+    st.sidebar.caption(
+        "Lower values (0.1–0.3) make outputs more deterministic and consistent — "
+        "recommended for fact-checking. Higher values increase creativity but reduce "
+        "reliability of structured JSON outputs."
+    )
     os.environ["LLM_TEMPERATURE"] = str(temperature)
 
     max_claims = st.sidebar.slider("Max claims", 1, 5, default_settings.max_claims)
+    st.sidebar.caption(
+        "More claims give the Judge stronger signal but increase runtime roughly "
+        "linearly — each claim triggers a Wikipedia and potentially a web search. "
+        "3–4 is the recommended range for speed vs. accuracy."
+    )
     os.environ["MAX_CLAIMS"] = str(max_claims)
 
     st.sidebar.caption("Make sure `ollama serve` is running if using Ollama.")
