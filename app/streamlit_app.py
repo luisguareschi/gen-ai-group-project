@@ -25,13 +25,20 @@ def sidebar_controls() -> None:
         "LLM backend",
         ["ollama", "openai"],
         index=0 if default_settings.backend == "ollama" else 1,
-        disabled=True,
     )
     os.environ["LLM_BACKEND"] = backend
 
     if backend == "ollama":
-        model = st.sidebar.text_input("Ollama model", value=default_settings.ollama_model, disabled=True)
-        base_url = st.sidebar.text_input("Ollama base URL", value=default_settings.ollama_base_url, disabled=True)
+        ollama_models = [
+            "qwen2.5:3b",
+            "qwen2.5:7b",
+            "qwen3:8b",
+            "gemma3:4b",
+        ]
+        default_model = default_settings.ollama_model
+        options = ollama_models if default_model in ollama_models else [default_model] + ollama_models
+        model = st.sidebar.selectbox("Ollama model", options, index=options.index(default_model))
+        base_url = st.sidebar.text_input("Ollama base URL", value=default_settings.ollama_base_url)
         os.environ["OLLAMA_MODEL"] = model
         os.environ["OLLAMA_BASE_URL"] = base_url
     else:
