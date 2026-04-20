@@ -97,20 +97,40 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
             "You are the Judge. Using the outputs of the previous three agents "
             "(claim extraction, fact-checking verdicts, and bias analysis), "
             "produce a FINAL classification of the article as REAL or FAKE.\n\n"
-            "Decision heuristic:\n"
-            "  - If most claims are CONTRADICTED -> likely FAKE.\n"
-            "  - If most claims are SUPPORTED and bias_score is low -> likely REAL.\n"
-            "  - High bias_score alone is a weak signal (REAL articles can be biased).\n"
-            "  - UNVERIFIABLE claims are neutral; weigh them less.\n\n"
-            "Return a JSON object with: label ('REAL' or 'FAKE'), confidence (0-1), "
-            "summary (2-3 sentence human-readable explanation), and "
+            "Step 1 — Count the fact-check verdicts:\n"
+            "  supported    = number of SUPPORTED claims\n"
+            "  contradicted = number of CONTRADICTED claims\n"
+            "  unverifiable = number of UNVERIFIABLE claims\n\n"
+            "Step 2 — Compute a base confidence using this formula:\n"
+            "  total_verifiable = supported + contradicted\n"
+            "  If total_verifiable > 0:\n"
+            "    base = (supported - contradicted) / total_verifiable\n"
+            "    confidence = 0.5 + abs(base) * 0.5   (maps -1..1 to 0.5..1.0)\n"
+            "    label = REAL if base >= 0 else FAKE\n"
+            "  If total_verifiable == 0 (all UNVERIFIABLE):\n"
+            "    Use bias_score as fallback:\n"
+            "      bias_score >= 0.6 -> label=FAKE, confidence = 0.5 + (bias_score - 0.6) * 0.5\n"
+            "      bias_score <  0.6 -> label=REAL, confidence = 0.5 + (0.6 - bias_score) * 0.5\n\n"
+            "Step 3 — Apply adjustments:\n"
+            "  - If label=REAL and bias_score >= 0.7: reduce confidence by 0.05 "
+            "(bias is a weak signal but adds uncertainty)\n"
+            "  - confidence must always be in range 0.5–1.0\n\n"
+            "Step 4 — Write a 2–3 sentence summary explaining the verdict. "
+            "Reference specific verdicts and the bias score. "
+            "Do not use generic filler like 'the article may be fake'.\n\n"
+            "Return a JSON object with: label ('REAL' or 'FAKE'), "
+            "confidence (0.5–1.0, calculated above), "
+            "summary (2–3 sentences), and "
             "agent_inputs_summary {claim_verdicts: [...], bias_score: float, tone: str}."
         ),
         agent=agents["judge"],
         expected_output=(
-            'A JSON object like {"label": "FAKE", "confidence": 0.82, '
-            '"summary": "...", "agent_inputs_summary": {"claim_verdicts": '
-            '["CONTRADICTED", "UNVERIFIABLE", "CONTRADICTED"], "bias_score": 0.7, '
+            'A JSON object like {"label": "FAKE", "confidence": 0.95, '
+            '"summary": "Two of three claims were directly contradicted by Wikipedia. '
+            "The third was unverifiable. Combined with a high bias score of 0.8, "
+            'this article is almost certainly fabricated.", '
+            '"agent_inputs_summary": {"claim_verdicts": '
+            '["CONTRADICTED", "UNVERIFIABLE", "CONTRADICTED"], "bias_score": 0.8, '
             '"tone": "sensationalist"}}.'
         ),
         output_pydantic=JudgeOutput,
