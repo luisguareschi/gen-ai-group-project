@@ -1,6 +1,6 @@
 # Multi-Agent Fake News Detection System
 
-A CrewAI-powered multi-agent pipeline that classifies news articles as **REAL** or **FAKE** using a sequential chain of four specialized LLM agents, backed by a local Ollama model (default `qwen2.5:3b`).
+A CrewAI-powered multi-agent pipeline that classifies news articles as **REAL** or **FAKE** using a sequential chain of four specialized LLM agents, backed by a local Ollama model or OpenAI.
 
 ## Pipeline
 
@@ -17,19 +17,25 @@ Article -> Claim Extractor -> Fact Checker (Wikipedia) -> Bias Detector -> Judge
 
 ### 1. Python environment
 
+Requires **Python 3.10–3.13**. Python 3.14+ is not supported by `crewai`.
+
 ```bash
+python3.13 -m venv .venv      # or python3.12
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
 ### 2. Ollama
 
-Make sure Ollama is running and the model is pulled:
+Check which models you already have, then pull one if needed:
 
 ```bash
-ollama pull qwen2.5:3b
-ollama serve     # leave running in a separate terminal
+ollama ls                  # list locally available models
+ollama pull qwen3:8b       # pull a model if not already present
+ollama serve               # leave running in a separate terminal
 ```
+
+Supported models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen3:8b`, `gemma3:4b`.
 
 ### 3. Environment
 
@@ -48,6 +54,7 @@ streamlit run app/streamlit_app.py
 
 - **Single Article** tab: paste a title + body, get a verdict with each agent's full output.
 - **Batch** tab: upload a CSV (`title,text` columns) and download annotated results.
+- **Sidebar**: switch backend (Ollama/OpenAI), select model, and adjust temperature at runtime.
 
 ### Notebooks
 
@@ -63,16 +70,34 @@ python scripts/run_batch.py --n 100 --out results/results.csv
 
 The batch runner is resumable: rerun the command and it will skip article IDs that already appear in the output CSV.
 
-## Backend switching
+## Changing models
 
-Edit `.env`:
+Where you make the change depends on how you're running the pipeline:
+
+| Context | Where to change |
+|---------|----------------|
+| Streamlit UI | Sidebar → **Ollama model** dropdown (takes effect immediately) |
+| Scripts / notebooks | Edit `OLLAMA_MODEL` in `.env` |
+| Default for new installs | Edit `OLLAMA_MODEL` in `.env.example` |
+
+First check what you have locally, then pull anything new:
+
+```bash
+ollama ls
+ollama pull qwen3:8b
+```
+
+Available Ollama models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen3:8b`, `gemma3:4b`.
+
+### Switching to OpenAI
+
+Set the following in `.env` (or via the Streamlit sidebar):
 
 ```
-LLM_BACKEND=ollama        # or "openai"
-OLLAMA_MODEL=qwen2.5:3b
+LLM_BACKEND=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini   # or gpt-4o, etc.
 ```
-
-For OpenAI, set `LLM_BACKEND=openai` and `OPENAI_API_KEY=sk-...`.
 
 ## Project structure
 

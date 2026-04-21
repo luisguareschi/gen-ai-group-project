@@ -14,7 +14,7 @@ class WikipediaSearchInput(BaseModel):
         description="A short search query describing the factual claim to check (e.g. entity, event, date).",
     )
     max_results: int = Field(
-        default=2,
+        default=1,
         ge=1,
         le=5,
         description="Maximum number of Wikipedia articles to summarize (1-5).",
@@ -42,7 +42,7 @@ class WikipediaSearchTool(BaseTool):
         blocks: list[str] = []
         for title in titles[:max_results]:
             try:
-                summary = wikipedia.summary(title, sentences=3, auto_suggest=False, redirect=True)
+                summary = wikipedia.summary(title, sentences=2, auto_suggest=False, redirect=True)
             except wikipedia.DisambiguationError as exc:
                 options = ", ".join(exc.options[:5])
                 blocks.append(f"[{title}] Disambiguation. Options: {options}")

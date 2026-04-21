@@ -13,6 +13,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 
+SUPPORTED_OLLAMA_MODELS = [
+    "qwen3:8b",
+    "qwen2.5:7b",
+    "qwen2.5:3b",
+    "gemma3:4b",
+    "gemma4:e2b",
+]
+
 
 @dataclass
 class Settings:
@@ -27,9 +35,14 @@ class Settings:
 
 
 def get_settings() -> Settings:
+    ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+    if ollama_model not in SUPPORTED_OLLAMA_MODELS:
+        raise ValueError(
+            f"Unsupported Ollama model: {ollama_model}\nSupported models: {SUPPORTED_OLLAMA_MODELS.join(', ')}"
+        )
     return Settings(
         backend=os.getenv("LLM_BACKEND", "ollama").lower(),
-        ollama_model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+        ollama_model=ollama_model,
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
