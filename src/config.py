@@ -15,6 +15,7 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 
 SUPPORTED_OLLAMA_MODELS = [
     "qwen3:8b",
+    "qwen2.5:14b",
     "qwen2.5:7b",
     "qwen2.5:3b",
     "gemma3:4b",
@@ -38,7 +39,7 @@ def get_settings() -> Settings:
     ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     if ollama_model not in SUPPORTED_OLLAMA_MODELS:
         raise ValueError(
-            f"Unsupported Ollama model: {ollama_model}\nSupported models: {SUPPORTED_OLLAMA_MODELS.join(', ')}"
+            f"Unsupported Ollama model: {ollama_model}\nSupported models: {', '.join(SUPPORTED_OLLAMA_MODELS)}"
         )
     return Settings(
         backend=os.getenv("LLM_BACKEND", "ollama").lower(),
