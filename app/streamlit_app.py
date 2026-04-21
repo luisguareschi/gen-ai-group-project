@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from src.config import settings as default_settings  # noqa: E402
+from src.config import SUPPORTED_OLLAMA_MODELS, settings as default_settings  # noqa: E402
 from src.crew import run_pipeline  # noqa: E402
 
 
@@ -29,12 +29,7 @@ def sidebar_controls() -> None:
     os.environ["LLM_BACKEND"] = backend
 
     if backend == "ollama":
-        ollama_models = [
-            "qwen3:8b",
-            "qwen2.5:7b",
-            "qwen2.5:3b",
-            "gemma3:4b",
-        ]
+        ollama_models = SUPPORTED_OLLAMA_MODELS
         default_model = default_settings.ollama_model
         options = ollama_models if default_model in ollama_models else [default_model] + ollama_models
         model = st.sidebar.selectbox("Ollama model", options, index=options.index(default_model))
