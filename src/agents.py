@@ -5,6 +5,9 @@ from crewai import Agent, LLM
 
 from .tools import WikipediaSearchTool, DuckDuckGoSearchTool
 
+# To switch DDG to Serper: replace DuckDuckGoSearchTool with SerperDevTool
+# from crewai_tools import SerperDevTool  (and remove DuckDuckGoSearchTool import)
+
 
 def build_agents(llm: LLM) -> dict[str, Agent]:
     """Create the four agents that make up the sequential pipeline."""
@@ -30,11 +33,8 @@ def build_agents(llm: LLM) -> dict[str, Agent]:
         ),
         backstory=(
             "You are a senior researcher at a fact-checking organization. "
-            "You first search Wikipedia for well-established facts. "
-            "If Wikipedia returns no useful results, you fall back to DuckDuckGo "
-            "to find recent or niche information. "
-            "You never fabricate evidence. Only mark a claim UNVERIFIABLE if "
-            "neither tool returns enough information to make a determination."
+            "You never fabricate evidence and always follow the two-step search "
+            "process described in your task instructions."
         ),
         tools=[WikipediaSearchTool(), DuckDuckGoSearchTool()],
         llm=llm,

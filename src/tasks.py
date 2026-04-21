@@ -84,13 +84,18 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
     t2 = Task(
         description=(
             "You will receive a JSON list of factual claims from the previous step. "
-            "For EACH claim, call the wikipedia_search tool with a focused query, "
-            "read the returned summaries, and decide a verdict:\n"
-            "  - SUPPORTED: Wikipedia clearly confirms the claim.\n"
-            "  - CONTRADICTED: Wikipedia clearly disproves the claim.\n"
-            "  - UNVERIFIABLE: Wikipedia does not contain enough information.\n\n"
+            "For EACH claim you MUST follow this two-step process:\n\n"
+            "  Step 1 — call wikipedia_search with a focused query.\n"
+            "  Step 2 — if Wikipedia does not return clear evidence to confirm or "
+            "contradict the claim, you MUST also call duckduckgo_search with the "
+            "same or a refined query. Do not skip Step 2.\n\n"
+            "After both searches, assign one of these verdicts:\n"
+            "  - SUPPORTED: at least one source clearly confirms the claim.\n"
+            "  - CONTRADICTED: at least one source clearly disproves the claim.\n"
+            "  - UNVERIFIABLE: neither Wikipedia nor DuckDuckGo returned enough "
+            "information to confirm or contradict the claim.\n\n"
             "For each claim produce an object with: claim, verdict, confidence (0-1), "
-            "evidence (a 1-2 sentence justification citing the Wikipedia page title).\n\n"
+            "evidence (a 1-2 sentence justification citing the source used).\n\n"
             "Do NOT fabricate evidence. If in doubt, use UNVERIFIABLE."
         ),
         agent=agents["fact_checker"],
