@@ -4,6 +4,7 @@ crewai-tools>=0.17.0
 pydantic>=2.6.0
 python-dotenv>=1.0.1
 wikipedia>=1.4.0
+duckduckgo-search>=6.0.0
 pandas>=2.2.0
 scikit-learn>=1.4.0
 matplotlib>=3.8.0

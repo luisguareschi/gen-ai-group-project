@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from crewai import Agent, LLM
 
-from .tools import WikipediaSearchTool
+from .tools import WikipediaSearchTool, DuckDuckGoSearchTool
 
 
 def build_agents(llm: LLM) -> dict[str, Agent]:
@@ -25,15 +25,18 @@ def build_agents(llm: LLM) -> dict[str, Agent]:
     fact_checker = Agent(
         role="Fact Checker",
         goal=(
-            "For each extracted claim, search Wikipedia and decide whether the claim "
-            "is SUPPORTED, CONTRADICTED, or UNVERIFIABLE given the evidence."
+            "For each extracted claim, search for evidence and decide whether the claim "
+            "is SUPPORTED, CONTRADICTED, or UNVERIFIABLE given the evidence found."
         ),
         backstory=(
             "You are a senior researcher at a fact-checking organization. "
-            "You never fabricate evidence. If Wikipedia does not contain enough "
-            "information, you mark a claim as UNVERIFIABLE instead of guessing."
+            "You first search Wikipedia for well-established facts. "
+            "If Wikipedia returns no useful results, you fall back to DuckDuckGo "
+            "to find recent or niche information. "
+            "You never fabricate evidence. Only mark a claim UNVERIFIABLE if "
+            "neither tool returns enough information to make a determination."
         ),
-        tools=[WikipediaSearchTool()],
+        tools=[WikipediaSearchTool(), DuckDuckGoSearchTool()],
         llm=llm,
         allow_delegation=False,
         verbose=True,
