@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from typing import Type
 
+import sys
+import time
+
 from crewai.tools import BaseTool
 from duckduckgo_search import DDGS
 from pydantic import BaseModel, Field
@@ -32,13 +35,17 @@ class DuckDuckGoSearchTool(BaseTool):
     args_schema: Type[BaseModel] = DuckDuckGoSearchInput
 
     def _run(self, query: str, max_results: int = 2) -> str:
+        print(f"[DDG] Searching: {query!r}", file=sys.stderr)
+        t0 = time.time()
         try:
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results, timeout=5))
         except Exception as exc:
+            print(f"[DDG] Failed in {time.time() - t0:.1f}s — {exc}", file=sys.stderr)
             return f"DuckDuckGo search failed: {exc}"
 
         if not results:
+            print(f"[DDG] No results in {time.time() - t0:.1f}s", file=sys.stderr)
             return f"No DuckDuckGo results for query: {query!r}"
 
         blocks = [
@@ -46,4 +53,5 @@ class DuckDuckGoSearchTool(BaseTool):
             for r in results
             if r.get("title") and r.get("body")
         ]
+        print(f"[DDG] {len(blocks)} result(s) in {time.time() - t0:.1f}s", file=sys.stderr)
         return "\n\n".join(blocks) if blocks else f"No readable results for query: {query!r}"

@@ -68,6 +68,8 @@ def run_pipeline(title: str, body: str) -> PipelineResult:
     roberta_result = None
     if settings.huggingface_api_key:
         roberta_result = classify_with_roberta(title, body, settings.huggingface_api_key)
+    else:
+        print("[RoBERTa] Skipped — HUGGINGFACE_API_KEY not set in .env")
 
     tasks = build_tasks(agents, title, body, roberta_result=roberta_result)
 
