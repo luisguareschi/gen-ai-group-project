@@ -81,21 +81,38 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result:
         output_pydantic=ClaimsOutput,
     )
 
-    t2 = Task(
+    t2a = Task(
         description=(
-            "You will receive a JSON list of factual claims from the previous step. "
-            "For EACH claim you MUST follow this two-step process:\n\n"
-            "  Step 1 — call wikipedia_search with a focused query.\n"
-            "  Step 2 — if Wikipedia does not return clear evidence to confirm or "
-            "contradict the claim, you MUST also call duckduckgo_search with the "
-            "same or a refined query. Do not skip Step 2.\n\n"
-            "After both searches, assign one of these verdicts:\n"
+            "You will receive a list of factual claims from the previous step. "
+            "Your ONLY job right now is to search for evidence — do NOT produce verdicts yet.\n\n"
+            "For EACH claim:\n"
+            "  1. Call wikipedia_search with a focused query.\n"
+            "  2. Then call duckduckgo_search with the same or a refined query.\n\n"
+            "You MUST call both tools for every claim. Do not skip either tool.\n"
+            "Do not write any verdicts or JSON. Just return the raw search results "
+            "as plain text, clearly labelled by claim number."
+        ),
+        agent=agents["fact_checker"],
+        expected_output=(
+            "Plain text search results for each claim, e.g.:\n"
+            "CLAIM 1: <claim text>\n"
+            "Wikipedia: <summary>\n"
+            "DuckDuckGo: <snippets>\n\n"
+            "CLAIM 2: ..."
+        ),
+    )
+
+    t2b = Task(
+        description=(
+            "You will receive raw search results for a list of factual claims. "
+            "Do NOT call any tools. Your only job is to read the search results "
+            "already provided and assign a verdict to each claim.\n\n"
+            "For each claim assign one of:\n"
             "  - SUPPORTED: at least one source clearly confirms the claim.\n"
             "  - CONTRADICTED: at least one source clearly disproves the claim.\n"
-            "  - UNVERIFIABLE: neither Wikipedia nor DuckDuckGo returned enough "
-            "information to confirm or contradict the claim.\n\n"
-            "For each claim produce an object with: claim, verdict, confidence (0-1), "
-            "evidence (a 1-2 sentence justification citing the source used).\n\n"
+            "  - UNVERIFIABLE: the search results do not contain enough information.\n\n"
+            "For each claim produce: claim, verdict, confidence (0-1), "
+            "evidence (1-2 sentences citing the source).\n\n"
             "Do NOT fabricate evidence. If in doubt, use UNVERIFIABLE."
         ),
         agent=agents["fact_checker"],
@@ -104,6 +121,7 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result:
             '"confidence": 0.8, "evidence": "..."}]} with one entry per claim.'
         ),
         output_pydantic=FactCheckOutput,
+        context=[t2a],
     )
 
     t3 = Task(
@@ -203,7 +221,7 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result:
             '"tone": "sensationalist"}}.'
         ),
         output_pydantic=JudgeOutput,
-        context=[t1, t2, t3],
+        context=[t1, t2b, t3],
     )
 
-    return [t1, t2, t3, t4]
+    return [t1, t2a, t2b, t3, t4]

@@ -82,11 +82,13 @@ def run_pipeline(title: str, body: str) -> PipelineResult:
 
     crew_output = crew.kickoff()
 
-    t1_out, t2_out, t3_out, t4_out = tasks[0].output, tasks[1].output, tasks[2].output, tasks[3].output
+    t1_out, _t2a_out, t2b_out, t3_out, t4_out = (
+        tasks[0].output, tasks[1].output, tasks[2].output, tasks[3].output, tasks[4].output
+    )
 
     return PipelineResult(
         claims=_coerce(t1_out, ClaimsOutput),
-        fact_check=_coerce(t2_out, FactCheckOutput),
+        fact_check=_coerce(t2b_out, FactCheckOutput),
         bias=_coerce(t3_out, BiasOutput),
         judge=_coerce(t4_out, JudgeOutput),
         raw={"crew_output": str(crew_output)},

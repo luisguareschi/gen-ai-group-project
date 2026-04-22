@@ -7,7 +7,7 @@ import sys
 import time
 
 from crewai.tools import BaseTool
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from pydantic import BaseModel, Field
 
 
@@ -39,7 +39,7 @@ class DuckDuckGoSearchTool(BaseTool):
         t0 = time.time()
         try:
             with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=max_results, timeout=5))
+                results = list(ddgs.text(query, max_results=max_results))
         except Exception as exc:
             print(f"[DDG] Failed in {time.time() - t0:.1f}s — {exc}", file=sys.stderr)
             return f"DuckDuckGo search failed: {exc}"
