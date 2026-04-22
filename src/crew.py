@@ -7,10 +7,12 @@ from typing import Any
 from crewai import Crew, Process
 
 from .agents import build_agents
+from .config import settings
 from .llm import build_llm
 from .parsing import extract_json
 from .schemas import BiasOutput, ClaimsOutput, FactCheckOutput, JudgeOutput
 from .tasks import build_tasks
+from .tools.roberta_classifier import classify_with_roberta
 
 
 @dataclass
@@ -61,7 +63,13 @@ def run_pipeline(title: str, body: str) -> PipelineResult:
     """Run the full 4-agent sequential pipeline on a single article."""
     llm = build_llm()
     agents = build_agents(llm)
-    tasks = build_tasks(agents, title, body)
+
+    # Run RoBERTa classifier before the crew — result is injected into the Judge's context
+    roberta_result = None
+    if settings.huggingface_api_key:
+        roberta_result = classify_with_roberta(title, body, settings.huggingface_api_key)
+
+    tasks = build_tasks(agents, title, body, roberta_result=roberta_result)
 
     crew = Crew(
         agents=list(agents.values()),
