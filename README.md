@@ -63,12 +63,18 @@ streamlit run app/streamlit_app.py
 
 ### Batch evaluation
 
+**WELFake dataset** (2015–2017 US political news):
 ```bash
 python scripts/download_dataset.py          # fetches Kaggle Fake/Real news
 python scripts/run_batch.py --n 100 --out results/results.csv
 ```
 
-The batch runner is resumable: rerun the command and it will skip article IDs that already appear in the output CSV.
+**algozee/fake-news dataset** (global news, mid-2024 onwards):
+```bash
+python scripts/run_batch_algozee.py --n 100 --out results/results_algozee.csv
+```
+
+Both runners are resumable: rerun the command and they will skip article IDs that already appear in the output CSV.
 
 ## Changing models
 
