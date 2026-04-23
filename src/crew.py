@@ -7,10 +7,12 @@ from typing import Any
 from crewai import Crew, Process
 
 from .agents import build_agents
+from .config import settings
 from .llm import build_llm
 from .parsing import extract_json
 from .schemas import BiasOutput, ClaimsOutput, FactCheckOutput, JudgeOutput
 from .tasks import build_tasks
+from .tools.roberta_classifier import classify_with_roberta
 
 
 @dataclass
@@ -61,7 +63,15 @@ def run_pipeline(title: str, body: str) -> PipelineResult:
     """Run the full 4-agent sequential pipeline on a single article."""
     llm = build_llm()
     agents = build_agents(llm)
-    tasks = build_tasks(agents, title, body)
+
+    # Run RoBERTa classifier before the crew — result is injected into the Judge's context
+    roberta_result = None
+    if settings.huggingface_api_key:
+        roberta_result = classify_with_roberta(title, body, settings.huggingface_api_key)
+    else:
+        print("[RoBERTa] Skipped — HUGGINGFACE_API_KEY not set in .env")
+
+    tasks = build_tasks(agents, title, body, roberta_result=roberta_result)
 
     crew = Crew(
         agents=list(agents.values()),
@@ -72,11 +82,13 @@ def run_pipeline(title: str, body: str) -> PipelineResult:
 
     crew_output = crew.kickoff()
 
-    t1_out, t2_out, t3_out, t4_out = tasks[0].output, tasks[1].output, tasks[2].output, tasks[3].output
+    t1_out, _t2a_out, t2b_out, t3_out, t4_out = (
+        tasks[0].output, tasks[1].output, tasks[2].output, tasks[3].output, tasks[4].output
+    )
 
     return PipelineResult(
         claims=_coerce(t1_out, ClaimsOutput),
-        fact_check=_coerce(t2_out, FactCheckOutput),
+        fact_check=_coerce(t2b_out, FactCheckOutput),
         bias=_coerce(t3_out, BiasOutput),
         judge=_coerce(t4_out, JudgeOutput),
         raw={"crew_output": str(crew_output)},

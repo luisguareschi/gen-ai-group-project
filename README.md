@@ -35,7 +35,7 @@ ollama pull qwen3:8b       # pull a model if not already present
 ollama serve               # leave running in a separate terminal
 ```
 
-Supported models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen3:8b`, `gemma3:4b`.
+Supported models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5:14b`, `qwen3:8b`, `gemma3:4b`, `gemma4:e2b`.
 
 ### 3. Environment
 
@@ -87,7 +87,7 @@ ollama ls
 ollama pull qwen3:8b
 ```
 
-Available Ollama models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen3:8b`, `gemma3:4b`.
+Available Ollama models: `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5:14b`, `qwen3:8b`, `gemma3:4b`, `gemma4:e2b`.
 
 ### Switching to OpenAI
 

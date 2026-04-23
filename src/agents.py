@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from crewai import Agent, LLM
 
-from .tools import WikipediaSearchTool, DuckDuckGoSearchTool
+from .tools import DuckDuckGoSearchTool, WikipediaSearchTool
+
+# To switch DDG to Serper: replace DuckDuckGoSearchTool with SerperDevTool
+# from crewai_tools import SerperDevTool  (and remove DuckDuckGoSearchTool import)
 
 
 def build_agents(llm: LLM) -> dict[str, Agent]:
@@ -30,11 +33,8 @@ def build_agents(llm: LLM) -> dict[str, Agent]:
         ),
         backstory=(
             "You are a senior researcher at a fact-checking organization. "
-            "You first search Wikipedia for well-established facts. "
-            "If Wikipedia returns no useful results, you fall back to DuckDuckGo "
-            "to find recent or niche information. "
-            "You never fabricate evidence. Only mark a claim UNVERIFIABLE if "
-            "neither tool returns enough information to make a determination."
+            "You never fabricate evidence and always follow all the steps in the search "
+            "process described in your task instructions. Use your available search tools for every claim."
         ),
         tools=[WikipediaSearchTool(), DuckDuckGoSearchTool()],
         llm=llm,

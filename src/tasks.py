@@ -12,7 +12,7 @@ def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + " [...]"
 
 
-def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
+def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result: dict | None = None) -> list[Task]:
     """Build the 4-task sequential pipeline for a single article."""
     title = (title or "").strip()
     body = _truncate(body, settings.max_article_chars)
@@ -81,16 +81,35 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
         output_pydantic=ClaimsOutput,
     )
 
-    t2 = Task(
+    t2a = Task(
         description=(
-            "You will receive a JSON list of factual claims from the previous step. "
-            "For EACH claim, call the wikipedia_search tool with a focused query, "
-            "read the returned summaries, and decide a verdict:\n"
-            "  - SUPPORTED: Wikipedia clearly confirms the claim.\n"
-            "  - CONTRADICTED: Wikipedia clearly disproves the claim.\n"
-            "  - UNVERIFIABLE: Wikipedia does not contain enough information.\n\n"
-            "For each claim produce an object with: claim, verdict, confidence (0-1), "
-            "evidence (a 1-2 sentence justification citing the Wikipedia page title).\n\n"
+            "You will receive a list of factual claims from the previous step. "
+            "Your ONLY job right now is to search for evidence — do NOT produce verdicts yet.\n\n"
+            "For EACH claim: call all available tools for every claim. Do not skip any tool.\n"
+            "Do not write any verdicts or JSON. Just return the raw search results "
+            "as plain text, clearly labelled by claim number."
+        ),
+        agent=agents["fact_checker"],
+        expected_output=(
+            "Plain text search results for each claim, e.g.:\n"
+            "CLAIM 1: <claim text>\n"
+            "Wikipedia: <summary>\n"
+            "DuckDuckGo: <snippets>\n\n"
+            "CLAIM 2: ..."
+        ),
+    )
+
+    t2b = Task(
+        description=(
+            "You will receive raw search results for a list of factual claims. "
+            "Do NOT call any tools. Your only job is to read the search results "
+            "already provided and assign a verdict to each claim.\n\n"
+            "For each claim assign one of:\n"
+            "  - SUPPORTED: at least one source clearly confirms the claim.\n"
+            "  - CONTRADICTED: at least one source clearly disproves the claim.\n"
+            "  - UNVERIFIABLE: the search results do not contain enough information.\n\n"
+            "For each claim produce: claim, verdict, confidence (0-1), "
+            "evidence (1-2 sentences citing the source).\n\n"
             "Do NOT fabricate evidence. If in doubt, use UNVERIFIABLE."
         ),
         agent=agents["fact_checker"],
@@ -99,6 +118,7 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
             '"confidence": 0.8, "evidence": "..."}]} with one entry per claim.'
         ),
         output_pydantic=FactCheckOutput,
+        context=[t2a],
     )
 
     t3 = Task(
@@ -136,8 +156,20 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
         output_pydantic=BiasOutput,
     )
 
+    if roberta_result and roberta_result.get("label"):
+        roberta_block = (
+            f"RoBERTa classifier signal: {roberta_result['label']} "
+            f"(confidence: {roberta_result['score']:.0%})\n"
+            "This is an independent ML classifier (hamzab/roberta-fake-news-classification) "
+            "trained on 44,000 news articles. Treat it as one additional signal — "
+            "it is not ground truth and can be wrong, especially on out-of-distribution articles.\n\n"
+        )
+    else:
+        roberta_block = "RoBERTa classifier signal: unavailable\n\n"
+
     t4 = Task(
         description=(
+            f"{roberta_block}"
             "You are the Judge. Using the outputs of the previous three agents "
             "(claim extraction, fact-checking verdicts, and bias analysis), "
             "produce a FINAL classification of the article as REAL or FAKE.\n\n"
@@ -154,20 +186,21 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
             "  (neutral article bias=0.45 → 0.0 effect,\n"
             "   biased article bias=1.0 → -0.55 FAKE push,\n"
             "   neutral article bias=0.0 → +0.45 REAL push)\n\n"
-            "Step 4 — Combine both signals (fact-checking 60%, bias 40%):\n"
-            "  combined = (fact_signal * 0.6) + (bias_signal * 0.4)\n"
+            "Step 4 — Combine all three signals (fact-checking 55%, bias 30%, RoBERTa 15%):\n"
+            "  roberta_signal = +1.0 if RoBERTa says REAL, -1.0 if FAKE, 0.0 if unavailable\n"
+            "  roberta_weight = roberta_score if available, else 0.0\n"
+            "  combined = (fact_signal * 0.55) + (bias_signal * 0.3) + (roberta_signal * roberta_weight * 0.15)\n"
             "  confidence = 0.5 + abs(combined) * 0.5\n"
             "  label = FAKE if combined < 0 else REAL\n"
             "  (When combined = 0.0 exactly, default to REAL)\n"
             "  confidence must always be in range 0.5–1.0\n\n"
-            "  Worked examples:\n"
-            "    4 SUP, 1 UNVER, bias=0.2 -> fact=+0.89, bias=+0.25, combined=+0.63 -> REAL, confidence=0.82\n"
-            "    2 CONT, bias=0.85        -> fact=-1.0,  bias=-0.40, combined=-0.76 -> FAKE, confidence=0.88\n"
-            "    2 SUP, 2 UNVER, bias=0.65-> fact=+0.67, bias=-0.20, combined=+0.32 -> REAL, confidence=0.66\n"
-            "    0 SUP, 4 UNVER, bias=0.6 -> fact=0.0,   bias=-0.15, combined=-0.06 -> FAKE, confidence=0.53\n"
-            "    0 SUP, 4 UNVER, bias=0.2 -> fact=0.0,   bias=+0.25, combined=+0.10 -> REAL, confidence=0.55\n\n"
-            "Step 4 — Write a 2–3 sentence summary explaining the verdict. "
-            "Reference specific verdicts and the bias score. "
+            "  Worked examples (with RoBERTa available):\n"
+            "    4 SUP, 1 UNVER, bias=0.2, RoBERTa=REAL(0.9)  -> REAL, confidence=0.84\n"
+            "    2 CONT, bias=0.85, RoBERTa=FAKE(0.95)        -> FAKE, confidence=0.91\n"
+            "    0 SUP, 3 UNVER, bias=0.6, RoBERTa=FAKE(0.8)  -> FAKE, confidence=0.60\n"
+            "    0 SUP, 3 UNVER, bias=0.6, RoBERTa unavailable -> FAKE, confidence=0.53\n\n"
+            "Step 5 — Write a 2–3 sentence summary explaining the verdict. "
+            "Reference specific verdicts, the bias score, and the RoBERTa signal if available. "
             "Do not use generic filler like 'the article may be fake'.\n\n"
             "Return a JSON object with: label ('REAL' or 'FAKE'), "
             "confidence (0.5–1.0, calculated above), "
@@ -185,7 +218,7 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
             '"tone": "sensationalist"}}.'
         ),
         output_pydantic=JudgeOutput,
-        context=[t1, t2, t3],
+        context=[t1, t2b, t3],
     )
 
-    return [t1, t2, t3, t4]
+    return [t1, t2a, t2b, t3, t4]

@@ -15,6 +15,7 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 
 SUPPORTED_OLLAMA_MODELS = [
     "qwen3:8b",
+    "qwen2.5:14b",
     "qwen2.5:7b",
     "qwen2.5:3b",
     "gemma3:4b",
@@ -29,6 +30,7 @@ class Settings:
     ollama_base_url: str
     openai_api_key: str | None
     openai_model: str
+    huggingface_api_key: str | None
     temperature: float
     max_claims: int
     max_article_chars: int
@@ -38,7 +40,7 @@ def get_settings() -> Settings:
     ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     if ollama_model not in SUPPORTED_OLLAMA_MODELS:
         raise ValueError(
-            f"Unsupported Ollama model: {ollama_model}\nSupported models: {SUPPORTED_OLLAMA_MODELS.join(', ')}"
+            f"Unsupported Ollama model: {ollama_model}\nSupported models: {', '.join(SUPPORTED_OLLAMA_MODELS)}"
         )
     return Settings(
         backend=os.getenv("LLM_BACKEND", "ollama").lower(),
@@ -46,6 +48,7 @@ def get_settings() -> Settings:
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY") or None,
         temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
         max_claims=int(os.getenv("MAX_CLAIMS", "3")),
         max_article_chars=int(os.getenv("MAX_ARTICLE_CHARS", "2000")),
