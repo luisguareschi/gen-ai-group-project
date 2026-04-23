@@ -10,7 +10,7 @@ def build_llm(settings: Settings | None = None) -> LLM:
     s = settings or default_settings
     if s.backend == "ollama":
         return LLM(
-            model=f"ollama/{s.ollama_model}",
+            model=f"ollama_chat/{s.ollama_model}",
             base_url=s.ollama_base_url,
             temperature=s.temperature,
         )
