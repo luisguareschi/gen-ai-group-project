@@ -85,10 +85,7 @@ def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result:
         description=(
             "You will receive a list of factual claims from the previous step. "
             "Your ONLY job right now is to search for evidence — do NOT produce verdicts yet.\n\n"
-            "For EACH claim:\n"
-            "  1. Call wikipedia_search with a focused query.\n"
-            "  2. Then call duckduckgo_search with the same or a refined query.\n\n"
-            "You MUST call both tools for every claim. Do not skip either tool.\n"
+            "For EACH claim: call all available tools for every claim. Do not skip any tool.\n"
             "Do not write any verdicts or JSON. Just return the raw search results "
             "as plain text, clearly labelled by claim number."
         ),
