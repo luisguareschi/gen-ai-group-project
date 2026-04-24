@@ -76,17 +76,7 @@ The fix was to split the fact-checking into two tasks:
 
 ---
 
-## 7. The `ollama/` vs `ollama_chat/` Prefix
-
-LiteLLM (which CrewAI uses under the hood) routes Ollama requests to different endpoints depending on the model prefix:
-- `ollama/model` → `/api/generate` (completion endpoint, no tool/function calling support)
-- `ollama_chat/model` → `/api/chat` (chat endpoint, tool calling supported in theory)
-
-Using `ollama/` means tool schemas are never sent to the model, so tool calling is impossible regardless of model size. Switching to `ollama_chat/` enables the chat endpoint, but Ollama's tool calling implementation is immature and the LiteLLM integration is unreliable — tools may still not execute even with a capable model.
-
----
-
-## 8. Bias Signal Is the Most Reliable Feature for Local Models
+## 7. Bias Signal Is the Most Reliable Feature for Local Models
 
 Because tool calling is unreliable with local models, the fact-checker often produces no useful signal (all verdicts are UNVERIFIABLE). In practice, the bias detector ends up carrying most of the weight in the final score. The bias task does not require any tools — it is pure reading comprehension and linguistic analysis, which local models handle well.
 
