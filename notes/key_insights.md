@@ -81,3 +81,13 @@ The fix was to split the fact-checking into two tasks:
 Because tool calling is unreliable with local models, the fact-checker often produces no useful signal (all verdicts are UNVERIFIABLE). In practice, the bias detector ends up carrying most of the weight in the final score. The bias task does not require any tools — it is pure reading comprehension and linguistic analysis, which local models handle well.
 
 This is a reasonable proxy: genuine fake news articles tend to use more inflammatory language, unattributed claims, and one-sided framing than wire-service reporting. But it is not a substitute for real fact-checking, and it will fail on well-written disinformation that mimics neutral style.
+
+---
+
+## 8. When to Break Out of the Framework
+
+CrewAI can technically force tool calls via `tool_choice` in LiteLLM, so running `_compute_verdict` as a Python tool is possible. The reason we didn't is simpler than it sounds: if removing the LLM from a step wouldn't change the output, remove it. `_compute_verdict` is just arithmetic on structured data - routing it through an agent adds failure points with zero benefit.
+
+The rule: keep things in the framework when the model's judgement is the value. Extract to Python when it's just computation.
+
+The two-crew split is a symptom of CrewAI not having a native concept of a deterministic step between tasks. Building our own agent orchestration - a simple `while` loop that calls the LLM, dispatches tool calls, and runs Python in between - would handle this more naturally, at the cost of losing CrewAI's boilerplate savings. Frameworks like LangGraph also solve this more cleanly, but the tradeoff is complexity.
