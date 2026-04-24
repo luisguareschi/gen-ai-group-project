@@ -208,7 +208,7 @@ __marimo__/
 
 # Project-specific
 data/
-results/*
+# results/*
 !results/.gitkeep
 
 .DS_Store
