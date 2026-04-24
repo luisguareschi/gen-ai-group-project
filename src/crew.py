@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from crewai import Crew, Process
 
@@ -11,7 +11,7 @@ from .config import settings
 from .llm import build_llm
 from .parsing import extract_json
 from .schemas import BiasOutput, ClaimsOutput, FactCheckOutput, JudgeOutput
-from .tasks import build_tasks
+from .tasks import build_judge_task, build_search_tasks
 from .tools.roberta_classifier import classify_with_roberta
 
 
@@ -59,37 +59,91 @@ def _coerce(task_output: Any, model):
         return None
 
 
+def _compute_verdict(
+    fact_check: FactCheckOutput | None,
+    bias: BiasOutput | None,
+    roberta_result: dict | None,
+) -> tuple[Literal["REAL", "FAKE"], float, list[str]]:
+    """Deterministically compute label, confidence, and verdict list from agent outputs."""
+    verdicts = [r.verdict for r in (fact_check.results if fact_check else [])]
+    supported = verdicts.count("SUPPORTED")
+    contradicted = verdicts.count("CONTRADICTED")
+    unverifiable = verdicts.count("UNVERIFIABLE")
+
+    score = supported * 1.0 + contradicted * -1.0
+    weight = supported * 1.0 + unverifiable * 0.5 + contradicted * 1.0
+    fact_signal = score / weight if weight > 0 else 0.0
+
+    bias_score = bias.bias_score if bias else 0.45
+    bias_signal = -(bias_score - 0.45)
+
+    if roberta_result and roberta_result.get("label"):
+        roberta_signal = 1.0 if roberta_result["label"] == "REAL" else -1.0
+        roberta_weight = roberta_result["score"]
+    else:
+        roberta_signal = 0.0
+        roberta_weight = 0.0
+
+    combined = fact_signal * 0.60 + bias_signal * 0.35 + roberta_signal * roberta_weight * 0.05
+    confidence = round(min(1.0, max(0.5, 0.5 + abs(combined) * 0.5)), 3)
+    label: Literal["REAL", "FAKE"] = "FAKE" if combined < 0 else "REAL"
+
+    print(
+        f"[Scorer] fact_signal={fact_signal:.3f}  bias_signal={bias_signal:.3f}  "
+        f"roberta={roberta_signal * roberta_weight:.3f}  combined={combined:.3f}  "
+        f"→ {label} ({confidence:.1%})"
+    )
+    return label, confidence, verdicts
+
+
 def run_pipeline(title: str, body: str) -> PipelineResult:
-    """Run the full 4-agent sequential pipeline on a single article."""
+    """Run the full pipeline: search+analysis crew → Python scoring → Judge summary."""
     llm = build_llm()
     agents = build_agents(llm)
 
-    # Run RoBERTa classifier before the crew — result is injected into the Judge's context
     roberta_result = None
     if settings.huggingface_api_key:
         roberta_result = classify_with_roberta(title, body, settings.huggingface_api_key)
     else:
         print("[RoBERTa] Skipped — HUGGINGFACE_API_KEY not set in .env")
 
-    tasks = build_tasks(agents, title, body, roberta_result=roberta_result)
-
-    crew = Crew(
+    # Phase 1: claim extraction, fact-checking (search + verdict), bias detection
+    search_tasks = build_search_tasks(agents, title, body)
+    crew1 = Crew(
         agents=list(agents.values()),
-        tasks=tasks,
+        tasks=search_tasks,
         process=Process.sequential,
         verbose=True,
     )
+    crew1.kickoff()
 
-    crew_output = crew.kickoff()
+    t1_out = _coerce(search_tasks[0].output, ClaimsOutput)
+    t2_out = _coerce(search_tasks[2].output, FactCheckOutput)  # index 2 = t2b (verdicts)
+    t3_out = _coerce(search_tasks[3].output, BiasOutput)
 
-    t1_out, _t2a_out, t2b_out, t3_out, t4_out = (
-        tasks[0].output, tasks[1].output, tasks[2].output, tasks[3].output, tasks[4].output
+    # Phase 2: deterministic scoring — no LLM involved
+    label, confidence, claim_verdicts = _compute_verdict(t2_out, t3_out, roberta_result)
+
+    # Phase 3: Judge writes a human-readable summary only
+    bias_score = t3_out.bias_score if t3_out else 0.45
+    tone = t3_out.tone if t3_out else "unknown"
+    judge_task = build_judge_task(
+        agents, label, confidence, claim_verdicts, bias_score, tone, roberta_result
     )
+    crew2 = Crew(
+        agents=[agents["judge"]],
+        tasks=[judge_task],
+        process=Process.sequential,
+        verbose=True,
+    )
+    crew2.kickoff()
+
+    t4_out = _coerce(judge_task.output, JudgeOutput)
 
     return PipelineResult(
-        claims=_coerce(t1_out, ClaimsOutput),
-        fact_check=_coerce(t2b_out, FactCheckOutput),
-        bias=_coerce(t3_out, BiasOutput),
-        judge=_coerce(t4_out, JudgeOutput),
-        raw={"crew_output": str(crew_output)},
+        claims=t1_out,
+        fact_check=t2_out,
+        bias=t3_out,
+        judge=t4_out,
+        raw={"label": label, "confidence": confidence},
     )
