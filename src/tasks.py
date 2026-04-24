@@ -1,8 +1,6 @@
 """Task builders for the sequential pipeline."""
 from __future__ import annotations
 
-from typing import Literal
-
 from crewai import Agent, Task
 
 from .config import settings
@@ -14,8 +12,8 @@ def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + " [...]"
 
 
-def build_search_tasks(agents: dict[str, Agent], title: str, body: str) -> list[Task]:
-    """Build t1–t3: claim extraction, fact-checking (search + verdict), and bias detection."""
+def build_tasks(agents: dict[str, Agent], title: str, body: str, roberta_result: dict | None = None) -> list[Task]:
+    """Build the 4-task sequential pipeline for a single article."""
     title = (title or "").strip()
     body = _truncate(body, settings.max_article_chars)
     max_claims = settings.max_claims
@@ -158,61 +156,69 @@ def build_search_tasks(agents: dict[str, Agent], title: str, body: str) -> list[
         output_pydantic=BiasOutput,
     )
 
-    return [t1, t2a, t2b, t3]
-
-
-def build_judge_task(
-    agents: dict[str, Agent],
-    label: Literal["REAL", "FAKE"],
-    confidence: float,
-    claim_verdicts: list[str],
-    bias_score: float,
-    tone: str,
-    roberta_result: dict | None = None,
-) -> Task:
-    """Build the Judge task given pre-computed verdict values.
-
-    The Judge's only job is to write a human-readable summary — all arithmetic
-    has already been done in Python by _compute_verdict().
-    """
-    verdicts_str = ", ".join(claim_verdicts) if claim_verdicts else "none"
-
     if roberta_result and roberta_result.get("label"):
-        roberta_line = (
-            f"RoBERTa signal : {roberta_result['label']} "
-            f"(confidence: {roberta_result['score']:.0%})"
+        roberta_block = (
+            f"RoBERTa classifier signal: {roberta_result['label']} "
+            f"(confidence: {roberta_result['score']:.0%})\n"
+            "This is an independent ML classifier (hamzab/roberta-fake-news-classification) "
+            "trained on 44,000 news articles. Treat it as one additional signal — "
+            "it is not ground truth and can be wrong, especially on out-of-distribution articles.\n\n"
         )
     else:
-        roberta_line = "RoBERTa signal : unavailable"
+        roberta_block = "RoBERTa classifier signal: unavailable\n\n"
 
-    return Task(
+    t4 = Task(
         description=(
-            "The pipeline has already computed the final verdict deterministically.\n\n"
-            "Pre-computed values (do NOT change these):\n"
-            f"  label      = {label}\n"
-            f"  confidence = {confidence:.3f}\n\n"
-            "Signals used to reach this verdict:\n"
-            f"  Claim verdicts : {verdicts_str}\n"
-            f"  Bias score     : {bias_score:.2f} (tone: {tone})\n"
-            f"  {roberta_line}\n\n"
-            "Your ONLY task: write a 2–3 sentence summary explaining this verdict to a reader. "
-            "Reference the specific claim verdicts, the bias score, and the RoBERTa signal if available. "
-            "Do not recalculate anything. Do not use generic filler like 'the article may be fake'.\n\n"
-            "Return a JSON object with:\n"
-            f"  label              = '{label}' (exact, do not change)\n"
-            f"  confidence         = {confidence:.3f} (exact, do not change)\n"
-            "  summary            = your 2–3 sentence explanation\n"
-            f"  agent_inputs_summary = {{claim_verdicts: {claim_verdicts!r}, "
-            f"bias_score: {bias_score}, tone: '{tone}'}}"
+            f"{roberta_block}"
+            "You are the Judge. Using the outputs of the previous three agents "
+            "(claim extraction, fact-checking verdicts, and bias analysis), "
+            "produce a FINAL classification of the article as REAL or FAKE.\n\n"
+            "Step 1 — Count the fact-check verdicts:\n"
+            "  supported    = number of SUPPORTED claims\n"
+            "  contradicted = number of CONTRADICTED claims\n"
+            "  unverifiable = number of UNVERIFIABLE claims\n\n"
+            "Step 2 — Compute the fact-check signal:\n"
+            "  score  = (supported * 1.0) + (contradicted * -1.0)\n"
+            "  weight = (supported * 1.0) + (unverifiable * 0.5) + (contradicted * 1.0)\n"
+            "  fact_signal = score / weight if weight > 0 else 0.0\n\n"
+            "Step 3 — Compute the bias signal:\n"
+            "  bias_signal = -(bias_score - 0.45)\n"
+            "  (neutral article bias=0.45 → 0.0 effect,\n"
+            "   biased article bias=1.0 → -0.55 FAKE push,\n"
+            "   neutral article bias=0.0 → +0.45 REAL push)\n\n"
+            "Step 4 — Combine all three signals (fact-checking 55%, bias 30%, RoBERTa 15%):\n"
+            "  roberta_signal = +1.0 if RoBERTa says REAL, -1.0 if FAKE, 0.0 if unavailable\n"
+            "  roberta_weight = roberta_score if available, else 0.0\n"
+            "  combined = (fact_signal * 0.55) + (bias_signal * 0.3) + (roberta_signal * roberta_weight * 0.15)\n"
+            "  confidence = 0.5 + abs(combined) * 0.5\n"
+            "  label = FAKE if combined < 0 else REAL\n"
+            "  (When combined = 0.0 exactly, default to REAL)\n"
+            "  confidence must always be in range 0.5–1.0\n\n"
+            "  Worked examples (with RoBERTa available):\n"
+            "    4 SUP, 1 UNVER, bias=0.2, RoBERTa=REAL(0.9)  -> REAL, confidence=0.84\n"
+            "    2 CONT, bias=0.85, RoBERTa=FAKE(0.95)        -> FAKE, confidence=0.91\n"
+            "    0 SUP, 3 UNVER, bias=0.6, RoBERTa=FAKE(0.8)  -> FAKE, confidence=0.60\n"
+            "    0 SUP, 3 UNVER, bias=0.6, RoBERTa unavailable -> FAKE, confidence=0.53\n\n"
+            "Step 5 — Write a 2–3 sentence summary explaining the verdict. "
+            "Reference specific verdicts, the bias score, and the RoBERTa signal if available. "
+            "Do not use generic filler like 'the article may be fake'.\n\n"
+            "Return a JSON object with: label ('REAL' or 'FAKE'), "
+            "confidence (0.5–1.0, calculated above), "
+            "summary (2–3 sentences), and "
+            "agent_inputs_summary {claim_verdicts: [...], bias_score: float, tone: str}."
         ),
         agent=agents["judge"],
         expected_output=(
-            f'A JSON object like {{"label": "{label}", "confidence": {confidence:.3f}, '
-            '"summary": "Two claims were UNVERIFIABLE and one CONTRADICTED by Wikipedia. '
-            f'The bias score of {bias_score:.2f} indicates sensationalist framing. '
-            'Combined, these signals strongly indicate fabricated content.", '
-            f'"agent_inputs_summary": {{"claim_verdicts": {claim_verdicts!r}, '
-            f'"bias_score": {bias_score}, "tone": "{tone}"}}}}'
+            'A JSON object like {"label": "FAKE", "confidence": 0.95, '
+            '"summary": "Two of three claims were directly contradicted by Wikipedia. '
+            "The third was unverifiable. Combined with a high bias score of 0.8, "
+            'this article is almost certainly fabricated.", '
+            '"agent_inputs_summary": {"claim_verdicts": '
+            '["CONTRADICTED", "UNVERIFIABLE", "CONTRADICTED"], "bias_score": 0.8, '
+            '"tone": "sensationalist"}}.'
         ),
         output_pydantic=JudgeOutput,
+        context=[t1, t2b, t3],
     )
+
+    return [t1, t2a, t2b, t3, t4]
