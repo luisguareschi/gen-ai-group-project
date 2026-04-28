@@ -107,6 +107,5 @@ src/        pipeline code (agents, tasks, tools, schemas, crew)
 app/        Streamlit UI
 notebooks/  implementation + evaluation notebooks
 scripts/    dataset download + batch runner
-data/       dataset files (gitignored)
-results/    CSV outputs (gitignored)
+results/    CSV outputs
 ```
